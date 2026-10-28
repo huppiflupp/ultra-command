@@ -101,7 +101,8 @@ class Catalog:
             do = [do] if isinstance(do, dict) else list(do)
             if "id" not in c or not c.get("say") or not do:
                 raise ValueError(f"{source}: command needs id, say and do: {c}")
-            self.commands[c["id"]] = Command(id=c["id"], say=list(c["say"]), do=do,
+            say = [c["say"]] if isinstance(c["say"], str) else list(c["say"])
+            self.commands[c["id"]] = Command(id=c["id"], say=say, do=do,
                                              help=c.get("help", ""), llm=c.get("llm", True))
 
     # --- matching -----------------------------------------------------------
@@ -124,8 +125,10 @@ class Catalog:
             return None
         _, kind, w = max(found)
         # Return the rest of the *original* text, so dictation keeps case and punctuation.
-        rest = _strip_words(text, len(w.split()))
-        return kind, rest
+        pattern = r"^\W*" + r"[\W_]+".join(re.escape(x) for x in w.split()) + r"\b[\W_]*"
+        m = re.match(pattern, unicodedata.normalize("NFKC", text), re.IGNORECASE)
+        rest = unicodedata.normalize("NFKC", text)[m.end():] if m else text
+        return kind, rest.strip()
 
     def match(self, text: str) -> Match | None:
         t = self.clean(text)
@@ -223,8 +226,3 @@ def tool_name(command_id: str) -> str:
     return re.sub(r"\W", "_", command_id)
 
 
-def _strip_words(text: str, n: int) -> str:
-    """Drops the first n words of the original text (plus punctuation around them)."""
-    tokens = re.findall(r"\S+", text)
-    rest = " ".join(tokens[n:])
-    return rest.lstrip(" ,.:;!?-–")

@@ -69,7 +69,8 @@ def cmd_check(cfg: dict, args) -> None:
 
     for tool in ("pw-record", "ydotool", "systemd-run"):
         report(tool, bool(shutil.which(tool)))
-    sock = cfg["input"]["ydotool_socket"] or os.environ.get("YDOTOOL_SOCKET", f"/run/user/{os.getuid()}/.ydotool_socket")
+    from .desktop import Desktop
+    sock = Desktop(cfg).env["YDOTOOL_SOCKET"]
     report("ydotoold socket", os.path.exists(sock), sock)
     try:
         urllib.request.urlopen(cfg["whisper"]["url"].rsplit("/", 1)[0] + "/", timeout=3).read()

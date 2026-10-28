@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.request
 import uuid
@@ -33,7 +34,7 @@ def transcribe(wav: bytes, url: str, language: str = "", prompt: str = "", timeo
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             data = json.loads(r.read())
-    except OSError as e:
+    except (OSError, ValueError, http.client.HTTPException) as e:
         raise STTError(f"whisper server {url}: {e}") from e
     if "error" in data:
         raise STTError(f"whisper: {data['error']}")

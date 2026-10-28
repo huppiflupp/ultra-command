@@ -53,9 +53,17 @@ class Desktop:
     # --- keyboard -------------------------------------------------------------
 
     def key(self, combo: str, repeat: int = 1) -> None:
-        args = keys.ydotool_args(combo, self.layout) * max(1, repeat)
-        res = subprocess.run(["ydotool", "key", "-d", "8", *args], env=self.env,
-                             capture_output=True, text=True, timeout=10)
+        once = keys.ydotool_args(combo, self.layout)
+        try:
+            res = subprocess.run(["ydotool", "key", "-d", "8", *once * max(1, repeat)], env=self.env,
+                                 capture_output=True, text=True, timeout=5 + 0.05 * len(once) * repeat)
+        except subprocess.TimeoutExpired:
+            # Killed mid-sequence: release everything, or Ctrl/Shift stay pressed.
+            subprocess.run(["ydotool", "key", *[a for a in once if a.endswith(":0")]],
+                           env=self.env, capture_output=True, timeout=5)
+            raise DesktopError(f"ydotool timed out on {combo!r}") from None
+        except OSError as e:
+            raise DesktopError(f"ydotool: {e}") from e
         if res.returncode != 0 or "failed to connect" in res.stderr.lower():
             raise DesktopError(f"ydotool: {res.stderr.strip() or res.returncode} (is ydotoold running?)")
 
@@ -63,18 +71,24 @@ class Desktop:
         return self.window_class.lower() in {t.lower() for t in self.cfg["input"]["terminals"]}
 
     def type_text(self, text: str) -> None:
-        """Types text via the clipboard – works for every character and layout."""
+        """Types text via the clipboard – works for every character and layout.
+
+        Klipper only hands out text: a copied image or file cannot be restored
+        afterwards (the dictated text stays in the clipboard instead).
+        """
         if not text:
             return
         inp = self.cfg["input"]
         with self._lock:
-            old = self.clipboard() if inp["restore_clipboard"] else None
+            old = self.clipboard() if inp["restore_clipboard"] else ""
             self.set_clipboard(text)
-            time.sleep(0.05)
-            self.key(inp["terminal_paste_key"] if self.is_terminal() else inp["paste_key"])
-            if old is not None:
+            try:
+                time.sleep(0.05)
+                self.key(inp["terminal_paste_key"] if self.is_terminal() else inp["paste_key"])
                 time.sleep(0.3)          # the application reads the clipboard asynchronously
-                self.set_clipboard(old)
+            finally:
+                if old:
+                    self.set_clipboard(old)
 
     # --- clipboard (Klipper) -----------------------------------------------------
 

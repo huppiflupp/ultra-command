@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import os
 import tomllib
 from importlib import resources
@@ -72,7 +73,7 @@ def _merge(base: dict, extra: dict) -> dict:
 
 
 def load(path: Path | None = None) -> dict:
-    cfg = DEFAULTS
+    cfg = copy.deepcopy(DEFAULTS)
     path = path or CONFIG_FILE
     if path.exists():
         with open(path, "rb") as f:

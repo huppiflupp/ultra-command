@@ -87,3 +87,37 @@ def test_keys():
     assert ydotool_args("ctrl+z", "de") == ydotool_args("ctrl+y", "us")    # QWERTZ
     assert qt_key("ScrollLock") == 0x01000026
     assert qt_key("Meta+F13") == 0x10000000 | 0x0100003C
+
+
+def test_keyword_rest_keeps_original_text(de):
+    assert de.keyword("- Schreib Hallo Welt.") == ("dictate", "Hallo Welt.")
+    assert de.keyword("KI-Frage: wie spät?") == ("assistant", "Frage: wie spät?")
+    assert de.keyword("Computer.") == ("assistant", "")
+
+
+def test_say_as_string():
+    cat = Catalog()
+    cat.add_toml('[[command]]\nid = "x"\nsay = "öffne spotify"\ndo = {run = "spotify"}')
+    assert cat.commands["x"].say == ["öffne spotify"]
+
+
+def test_load_does_not_touch_defaults(tmp_path):
+    (tmp_path / "c.toml").write_text('language = "en"')
+    config.load(tmp_path / "missing.toml")
+    assert config.DEFAULTS["input"]["layout"] == ""
+    assert config.load(tmp_path / "c.toml")["input"]["layout"] == "en"
+
+
+def test_repeat_is_capped(de):
+    from ultracommand.actions import ActionError, Executor
+
+    class FakeDesktop:
+        def is_terminal(self):
+            return False
+
+        def key(self, combo, repeat):
+            raise AssertionError("must not send 1000 key presses")
+
+    m = de.match("runter 1000")
+    with pytest.raises(ActionError):
+        Executor(FakeDesktop()).execute(m.command, m.slots)

@@ -24,6 +24,9 @@ from .catalog import Command
 from .desktop import Desktop, DesktopError
 
 
+MAX_REPEAT = 50                 # "runter 1000" is a recognition error, not a wish
+
+
 class ActionError(RuntimeError):
     pass
 
@@ -63,6 +66,8 @@ class Executor:
         d = self.desktop
         if "key" in step:
             repeat = int(step.get("repeat", 1))
+            if not 1 <= repeat <= MAX_REPEAT:
+                raise ValueError(f"repeat {repeat} out of range 1..{MAX_REPEAT}")
             combos = step["terminal"] if "terminal" in step and d.is_terminal() else step["key"]
             for combo in combos if isinstance(combos, list) else [combos]:
                 d.key(combo, repeat)

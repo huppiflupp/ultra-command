@@ -21,7 +21,7 @@ import dbus.service
 from gi.repository import GLib
 
 from . import config, keys, stt
-from .actions import ActionError, Executor
+from .actions import ActionError, Executor, _fill
 from .assistant import Assistant
 from .audio import Recorder
 from .catalog import Catalog, Match
@@ -63,7 +63,7 @@ class Brain:
 
     def _repeat(self) -> str:
         if not self.last:
-            return "nothing to repeat"
+            raise ValueError("nothing to repeat")
         return self.executor.execute(self.last.command, self.last.slots)
 
     def handle(self, text: str, mode: str = "talk") -> None:
@@ -97,15 +97,16 @@ class Brain:
 
     def run(self, m: Match) -> None:
         self.log(f"  → {m.command.id} {m.slots or ''} ({m.score:.2f})")
+        what = _fill(m.command.say[0], m.slots)
         try:
             self.executor.execute(m.command, m.slots)
         except ActionError as e:
             self.log(f"  ! {e}")
-            self.desktop.osd(self.msg("failed", what=m.command.say[0]), "dialog-error")
+            self.desktop.osd(self.msg("failed", what=what), "dialog-error")
             return
         if m.command.do[0].get("builtin") != "repeat":
             self.last = m
-        self.desktop.osd(f"✓ {m.command.say[0]}")
+        self.desktop.osd(f"✓ {what}")
 
     def dictate(self, text: str) -> None:
         if not text:
@@ -169,7 +170,6 @@ class Daemon:
         self.mode = "talk"
         self.jobs: queue.Queue = queue.Queue()
         self.prompt = self.catalog.vocabulary() if cfg["whisper"]["prompt_commands"] else ""
-        self.hotkeys: dict[str, list] = {}      # mode → KGlobalAccel action id
 
     @staticmethod
     def log(text: str) -> None:
@@ -227,7 +227,6 @@ class Daemon:
             default = dbus.Array([keys.qt_key(combo)] if combo else [], signature="i")
             kga.setShortcut(aid, default, dbus.UInt32(1))                 # IsDefault
             active = kga.setShortcut(aid, default, dbus.UInt32(2))        # SetPresent, keeps user changes
-            self.hotkeys[mode] = aid
             if active:
                 self.log(f"hotkey {mode}: {combo or 'set in System Settings'}")
         path = kga.getComponent("ultra-command")

@@ -106,17 +106,21 @@ class Assistant:
                 break
             for call in calls:
                 fn = call["function"]
-                args = fn.get("arguments") or {}
-                if isinstance(args, str):
-                    args = json.loads(args or "{}")
                 try:
+                    args = fn.get("arguments") or {}
+                    if isinstance(args, str):
+                        args = json.loads(args or "{}")
                     result = self._tool(fn["name"], args)
                 except (ActionError, DesktopError, ValueError) as e:
                     result = f"error: {e}"
                 messages.append({"role": "tool", "tool_name": fn["name"], "content": result})
         else:
             answer = f"Stopped after {self.cfg['max_steps']} steps."
-        # Keep the conversation (without the system prompt) for follow-ups.
-        self.history = messages[1:][-20:]
+        # Keep the conversation (without the system prompt) for follow-ups, starting at a
+        # user turn – tool results without their tool call would confuse the model.
+        keep = messages[1:][-20:]
+        while keep and keep[0]["role"] != "user":
+            keep.pop(0)
+        self.history = keep
         self.last = time.monotonic()
         return answer
