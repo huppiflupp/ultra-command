@@ -57,6 +57,7 @@ class Brain:
         self.catalog = catalog
         self.log = log
         self.last: Match | None = None
+        self.prompt = config.whisper_prompt(cfg, catalog.prompt)     # what Whisper gets in talk mode
         self.executor = Executor(desktop, {"repeat": self._repeat, "cancel": lambda: ""})
         self.assistant = Assistant(cfg, catalog, self.executor, desktop,
                                    on_step=lambda s: desktop.osd(f"🤖 {s}"))
@@ -70,7 +71,7 @@ class Brain:
         return self.executor.execute(self.last.command, self.last.slots)
 
     def handle(self, text: str, mode: str = "talk") -> None:
-        if self.catalog.is_noise(text):
+        if self.catalog.is_noise(text) or (mode != "dictate" and self.catalog.is_prompt_echo(text, self.prompt)):
             self.log(f"(noise) {text!r}")
             return
         self.log(f"[{mode}] {text!r}")
@@ -94,6 +95,8 @@ class Brain:
         self.log(f"  → no command, fallback {fallback}")
         if fallback == "dictate":
             self.dictate(text)
+        elif fallback == "guess":
+            self.guess(text)
         elif fallback == "assistant":
             self.ask(text)
         else:
@@ -124,14 +127,42 @@ class Brain:
             self.log(f"  ! {e}")
             self.desktop.osd(self.msg("failed", what="type"), "dialog-error")
 
+    def _llm_failed(self, what: str, e: Exception) -> None:
+        self.log(f"  ! {what}: {e}")
+        self.desktop.notify("Ultra-Command", self.msg("assistant_error", error=e), "dialog-error")
+
+    def guess(self, text: str) -> None:
+        """Unaddressed speech that matched no command: let the model pick one command, or nothing.
+
+        Loading the model takes long and would hold up the next real command, so while it is
+        not in memory nothing is guessed – it gets loaded in the background instead.
+        """
+        try:
+            if not self.assistant.loaded():
+                self.log("  🤖 model not loaded – loading it, no guess this time")
+                self.assistant.warm_up_once()
+                self.desktop.osd(self.msg("unknown", text=text), "dialog-warning")
+                return
+            self.desktop.osd(self.msg("thinking"), "dialog-question")
+            m = self.assistant.classify(text)
+        except TimeoutError:                        # model was pushed out meanwhile – just a miss
+            self.log("  🤖 guess timed out")
+            m = None
+        except Exception as e:                      # network, model missing, bad JSON ...
+            return self._llm_failed("classify", e)
+        if m:
+            self.log("  🤖 guessed:")
+            self.run(m)
+        else:
+            self.log("  🤖 no command")
+            self.desktop.osd(self.msg("unknown", text=text), "dialog-warning")
+
     def ask(self, text: str) -> None:
         self.desktop.osd(self.msg("thinking"), "dialog-question")
         try:
             answer = self.assistant.ask(text)
         except Exception as e:                      # network, model missing, bad JSON …
-            self.log(f"  ! assistant: {e}")
-            self.desktop.notify("ultra-command", self.msg("assistant_error", error=e), "dialog-error")
-            return
+            return self._llm_failed("assistant", e)
         self.log(f"  🤖 {answer}")
         if answer:
             self.desktop.notify(text, answer, "dialog-information")
@@ -178,10 +209,10 @@ class Daemon:
         self.catalog = load_catalog(cfg)
         self.brain = Brain(cfg, self.desktop, self.catalog, log=self.log)
         a = cfg["audio"]
-        self.recorder = Recorder(a["max_seconds"], a["silence_seconds"], a["silence_level"])
+        self.recorder = Recorder(a["max_seconds"], a["silence_seconds"], a["silence_level"], a["speech_level"])
         self.mode = "talk"
         self.jobs: queue.Queue = queue.Queue()
-        self.prompt = self.catalog.vocabulary() if cfg["whisper"]["prompt_commands"] else ""
+
 
     @staticmethod
     def log(text: str) -> None:
@@ -201,6 +232,10 @@ class Daemon:
         wav = self.recorder.stop()
         if wav:
             self.jobs.put(("audio", wav, self.mode))
+        elif self.recorder.loudest:
+            self.log(f"too quiet (loudest {self.recorder.loudest:.0f} < speech_level "
+                     f"{self.cfg['audio']['speech_level']}) – not sent to Whisper")
+            self.desktop.osd(self.brain.msg("too_quiet"), "dialog-warning")
         return False                                  # for GLib.idle_add: run once
 
     def toggle(self, mode: str) -> None:
@@ -217,7 +252,7 @@ class Daemon:
                 if kind == "audio":
                     t0 = time.monotonic()
                     text = stt.transcribe(data, w["url"], self.cfg["language"],
-                                          "" if mode == "dictate" else self.prompt, w["timeout"])
+                                          "" if mode == "dictate" else self.brain.prompt, w["timeout"])
                     self.log(f"whisper {time.monotonic() - t0:.2f} s")
                 else:
                     text = data

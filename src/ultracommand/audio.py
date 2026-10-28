@@ -37,12 +37,16 @@ class Recorder:
     without speech (once speech was heard) – used by the toggle mode.
     """
 
-    def __init__(self, max_seconds: float = 60, silence_seconds: float = 1.2, silence_level: float = 500):
+    def __init__(self, max_seconds: float = 60, silence_seconds: float = 1.2, silence_level: float = 500,
+                 speech_level: float = 0):
         self.max_seconds = max_seconds
         self.silence_seconds = silence_seconds
         self.silence_level = silence_level
+        self.speech_level = speech_level
+        self.loudest = 0.0             # of the last recording, for the log
         self._proc: subprocess.Popen | None = None
         self._pcm = bytearray()
+        self._loudest = 0.0
         self._reader: threading.Thread | None = None
         self._lock = threading.Lock()
 
@@ -55,6 +59,7 @@ class Recorder:
             if self._proc:
                 return
             self._pcm = bytearray()
+            self._loudest = 0.0
             self._proc = subprocess.Popen(
                 ["pw-record", "--raw", "--rate", str(RATE), "--channels", "1", "--format", "s16", "-"],
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -65,6 +70,8 @@ class Recorder:
         begun, quiet_since, started = False, None, time.monotonic()
         while chunk := proc.stdout.read(CHUNK):
             self._pcm += chunk
+            level = rms(chunk)
+            self._loudest = max(self._loudest, level)
             now = time.monotonic()
             if now - started > self.max_seconds:
                 proc.terminate()
@@ -73,7 +80,7 @@ class Recorder:
                 break
             if on_silence is None:
                 continue
-            if rms(chunk) >= self.silence_level:
+            if level >= self.silence_level:
                 begun, quiet_since = True, None
             elif begun:
                 quiet_since = quiet_since or now
@@ -86,6 +93,7 @@ class Recorder:
         with self._lock:
             proc, self._proc = self._proc, None
         if proc is None:
+            self.loudest = 0.0
             return b""
         proc.terminate()
         try:
@@ -95,4 +103,10 @@ class Recorder:
         if self._reader:
             self._reader.join(timeout=2)
         pcm = bytes(self._pcm)
-        return to_wav(pcm) if len(pcm) >= RATE // 5 * 2 else b""    # < 0.2 s: a slip of the key
+        self.loudest = 0.0                        # 0 = no "too quiet" report
+        if len(pcm) < RATE // 5 * 2:              # < 0.2 s: a slip of the key
+            return b""
+        self.loudest = self._loudest
+        if self._loudest < self.speech_level:     # nothing but room noise – Whisper would invent text
+            return b""
+        return to_wav(pcm)

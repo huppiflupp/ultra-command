@@ -2,6 +2,11 @@
 # Your own commands go into ~/.config/ultra-command/commands.toml (same format,
 # the same id replaces a command from here). Dry run: ultra-command match "maximize window"
 
+# Context for Whisper: one complete sentence with words it would otherwise mishear (program
+# names!). No comma lists – Whisper imitates the style. And no command: on silence Whisper
+# sometimes repeats the context, and a command in it would then run.
+prompt = "This computer runs Thunderbird, Dolphin, Kate and several consoles, with windows, tabs and desktops."
+
 filler = ["please", "now", "just", "the", "a", "an"]
 
 # What Whisper likes to invent on silence.
@@ -62,10 +67,17 @@ do = { kwin = "Window Minimize" }
 help = "Minimize the active window"
 
 [[command]]
+id = "window.minimize_app"
+say = ["minimize {app}", "hide {app}"]
+do = { minimize = "{app}" }
+help = "Minimize the window of an application"
+
+[[command]]
 id = "window.close"
 say = ["close window"]
 do = { kwin = "Window Close" }
 help = "Close the active window"
+guess = false
 
 [[command]]
 id = "window.fullscreen"
@@ -138,6 +150,7 @@ id = "tab.close"
 say = ["close tab"]
 do = { key = "ctrl+w", terminal = "ctrl+shift+w" }
 help = "Close the current tab"
+guess = false
 
 [[command]]
 id = "tab.next"
@@ -228,18 +241,21 @@ id = "edit.delete_word"
 say = ["delete word"]
 do = { key = "ctrl+backspace" }
 help = "Delete the word before the cursor"
+guess = false
 
 [[command]]
 id = "edit.delete_words"
 say = ["delete {n} words"]
 do = { key = "ctrl+backspace", repeat = "{n}" }
 help = "Delete n words before the cursor"
+guess = false
 
 [[command]]
 id = "key.enter"
 say = ["enter", "press enter", "submit", "new line"]
 do = { key = "enter" }
 help = "Press Enter"
+guess = false
 
 [[command]]
 id = "key.escape"

@@ -2,6 +2,11 @@
 # Eigene Befehle gehören nach ~/.config/ultra-command/commands.toml (gleiches Format,
 # gleiche id ersetzt einen Befehl von hier). Probelauf: ultra-command match "fenster maximieren"
 
+# Kontext für Whisper: ein ganzer Satz mit den Wörtern, die es sonst verhört (Programmnamen!).
+# Keine Komma-Listen – Whisper ahmt den Stil nach. Und kein Befehl: bei Stille wiederholt
+# Whisper den Kontext manchmal, ein Befehl darin würde dann ausgeführt.
+prompt = "Auf dem Rechner laufen Thunderbird, Dolphin, Kate und mehrere Konsolen, mit Fenstern, Tabs und Arbeitsflächen."
+
 filler = ["bitte", "mal", "doch", "jetzt", "einfach", "der", "die", "das", "den", "dem", "ein", "eine", "einen"]
 
 # Was Whisper bei Stille gern erfindet.
@@ -49,6 +54,7 @@ cancelled = "Abgebrochen"
 unknown = "Unbekannter Befehl: {text}"
 failed = "Fehlgeschlagen: {what}"
 stt_error = "Spracherkennung nicht erreichbar"
+too_quiet = "Zu leise – nichts gehört"
 assistant_error = "KI nicht erreichbar: {error}"
 hotkey_talk = "Sprechen (halten)"
 hotkey_dictate = "Diktieren (halten)"
@@ -124,6 +130,13 @@ id = "window.close"
 say = ["fenster schließen"]
 do = { kwin = "Window Close" }
 help = "Close the active window"
+guess = false                   # never from unaddressed speech – unsaved work
+
+[[command]]
+id = "window.minimize_app"
+say = ["{app} minimieren"]
+do = { minimize = "{app}" }
+help = "Minimize the window of an application"
 
 [[command]]
 id = "window.fullscreen"
@@ -169,13 +182,15 @@ help = "Show the desktop (minimize everything)"
 
 [[command]]
 id = "desktop.switch"
-say = ["desktop {n}", "arbeitsfläche {n}"]
+say = ["desktop {n}", "arbeitsfläche {n}", "wechsel zu desktop {n}", "wechsel zu arbeitsfläche {n}",
+       "wechsel auf desktop {n}", "wechsel auf arbeitsfläche {n}"]
 do = { kwin = "Switch to Desktop {n}" }
 help = "Switch to virtual desktop number n"
 
 [[command]]
 id = "window.focus"
-say = ["wechsel zu {app}", "geh zu {app}", "zu {app}", "nächste {app}", "andere {app}", "{app}"]
+say = ["wechsel zu {app}", "wechsel zurück zu {app}", "zurück zu {app}", "geh zu {app}", "zu {app}",
+       "nächste {app}", "andere {app}", "{app}"]
 do = { focus = "{app}" }
 help = "Switch to the window of an application (the next one if it is already active); start it if it is not running"
 
@@ -198,6 +213,7 @@ id = "tab.close"
 say = ["tab schließen", "tab zu"]
 do = { key = "ctrl+w", terminal = "ctrl+shift+w" }
 help = "Close the current tab"
+guess = false
 
 [[command]]
 id = "tab.next"
@@ -290,12 +306,14 @@ id = "edit.delete_word"
 say = ["wort löschen"]
 do = { key = "ctrl+backspace" }
 help = "Delete the word before the cursor"
+guess = false
 
 [[command]]
 id = "edit.delete_words"
 say = ["{n} wörter löschen"]
 do = { key = "ctrl+backspace", repeat = "{n}" }
 help = "Delete n words before the cursor"
+guess = false
 
 # --- Tasten und Bewegen ---------------------------------------------------------------
 
@@ -304,6 +322,7 @@ id = "key.enter"
 say = ["enter", "eingabe", "absenden", "neue zeile"]
 do = { key = "enter" }
 help = "Press Enter"
+guess = false                   # would send messages and forms
 
 [[command]]
 id = "key.escape"
@@ -337,13 +356,15 @@ help = "Arrow up, n times"
 
 [[command]]
 id = "move.page_down"
-say = ["seite runter", "weiter runter", "bild runter"]
+say = ["seite runter", "weiter runter", "bild runter", "scroll runter", "runter scrollen", "nach unten scrollen",
+       "scroll nach unten", "rollen nach unten", "roll nach unten"]
 do = { key = "pagedown" }
 help = "Page down"
 
 [[command]]
 id = "move.page_up"
-say = ["seite hoch", "bild hoch"]
+say = ["seite hoch", "bild hoch", "scroll hoch", "hoch scrollen", "nach oben scrollen", "scroll nach oben",
+       "rollen nach oben", "roll nach oben"]
 do = { key = "pageup" }
 help = "Page up"
 

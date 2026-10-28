@@ -51,7 +51,8 @@ class Desktop:
         self._bus: dbus.Bus | None = None
         self._notify_id = 0
         # Reported by the KWin script (data/active_window.js) on every window change:
-        # [{"id", "cls", "caption", "active"}], in KWin's stacking order.
+        # [{"id", "cls", "caption", "active", "minimized", "here"}], stacking order bottom → top;
+        # "here" = on the current virtual desktop.
         self.windows: list[dict] = []
         self._lock = threading.Lock()
 
@@ -143,28 +144,46 @@ class Desktop:
 
     # --- windows ---------------------------------------------------------------------
 
-    def activate(self, window_id: str) -> None:
-        """Activates a window by its KWin id, via a one-shot KWin script."""
+    def _on_window(self, window_id: str, action_js: str, done) -> bool:
+        """Runs `action_js` (with `w` bound) on one window via a one-shot KWin script, then waits
+        until the window script reports `done(window)` – or 1.5 s. Returns whether it did."""
         js = ("for (const w of workspace.windowList()) {\n"
-              f"  if (w.internalId.toString() === {json.dumps(window_id)}) {{\n"
-              "    if (w.minimized) w.minimized = false;\n"
-              "    workspace.activeWindow = w;\n  }\n}\n")
-        name = "ultra-command-activate"
+              f"  if (w.internalId.toString() === {json.dumps(window_id)}) {{ {action_js} }}\n}}\n")
+        name = "ultra-command-oneshot"
         with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as f:
             f.write(js)
         try:
             load_kwin_script(self.bus, f.name, name)
             # KWin runs the script asynchronously; the window script reports the result.
             deadline = time.monotonic() + 1.5
-            while self.active_window["id"] != window_id and time.monotonic() < deadline:
+            while not done(self._window(window_id)) and time.monotonic() < deadline:
                 time.sleep(0.05)
         except dbus.DBusException as e:
             raise DesktopError(f"KWin: {e.get_dbus_message()}") from e
         finally:
             unload_kwin_script(self.bus, name)
             os.unlink(f.name)
-        if self.active_window["id"] != window_id:
+        return done(self._window(window_id))
+
+    def _window(self, window_id: str) -> dict:
+        return next((w for w in self.windows if w["id"] == window_id), {})
+
+    def activate(self, window_id: str) -> None:
+        """Activates a window by its KWin id (un-minimizing it)."""
+        if not self._on_window(window_id, "if (w.minimized) w.minimized = false; workspace.activeWindow = w;",
+                               lambda w: w.get("active", False)):
             raise DesktopError(f"window {window_id} was not activated (closed?)")
+
+    def minimize(self, app: str) -> str:
+        """Minimizes the program's window: the active one if it is active, else the topmost visible."""
+        wins = [w for w in self.windows_of(app) if not w.get("minimized")]
+        wins = [w for w in wins if w.get("here", True)] or wins       # this desktop first
+        if not wins:
+            raise DesktopError(f"{app} has no visible window")
+        target = next((w for w in wins if w["active"]), wins[-1])
+        if not self._on_window(target["id"], "w.minimized = true;", lambda w: w.get("minimized", False)):
+            raise DesktopError(f"{target['caption']!r} was not minimized")
+        return f"minimized {target['caption']!r}"
 
     def windows_of(self, app: str) -> list[dict]:
         """Windows whose class belongs to a program ("konsole" → "org.kde.konsole").

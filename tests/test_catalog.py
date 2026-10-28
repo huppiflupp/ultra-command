@@ -1,3 +1,6 @@
+import copy
+import re
+
 import pytest
 
 from ultracommand import config
@@ -149,7 +152,7 @@ def test_text_slot_keeps_words():
 
 def test_windows_of():
     from ultracommand.desktop import Desktop
-    d = Desktop(config.load())
+    d = Desktop(copy.deepcopy(config.DEFAULTS))
     d.windows = [{"id": "1", "cls": "org.kde.konsole", "caption": "", "active": False},
                  {"id": "2", "cls": "net.thunderbird.Thunderbird", "caption": "", "active": True},
                  {"id": "3", "cls": "code-oss-helper", "caption": "", "active": False},
@@ -158,3 +161,113 @@ def test_windows_of():
     assert [w["id"] for w in d.windows_of("thunderbird")] == ["2"]
     assert d.windows_of("code") == []                      # no substring match
     assert [w["id"] for w in d.windows_of("flatpak run org.foo.App")] == ["4"]
+
+
+@pytest.mark.parametrize("text, answer, expected", [
+    ("Karte", {"command": "app.open", "args": {"app": "kate"}}, None),            # name not said
+    ("Mail Programm aufmachen", {"command": "app.open", "args": {"app": "thunderbird"}},
+     ("app.open", {"app": "thunderbird"})),                                       # spoken key "mail"
+    ("Bring Thunderbird nach vorne", {"command": "window.focus", "args": {"app": "thunderbird"}},
+     ("window.focus", {"app": "thunderbird"})),
+    ("ein bisschen runter", {"command": "move.down", "args": {"n": "2"}}, ("move.down", {"n": 1})),  # n not said
+    ("drei runter bitte", {"command": "move.down", "args": {"n": "50"}}, ("move.down", {"n": 3})),
+    ("öffne reboot", {"command": "app.open", "args": {"app": "reboot"}}, None),        # not a slot value
+    ("öffne kate", {"command": "uc.unknown", "args": {}}, None),
+    ("bla", {"command": "uc.repeat", "args": {}}, None),                          # not offered to the LLM
+    ("bla", {"command": None, "args": {}}, None),
+])
+def test_classify_guard(de, text, answer, expected):
+    import json
+    from ultracommand.assistant import Assistant
+    a = Assistant(copy.deepcopy(config.DEFAULTS), de, executor=None, desktop=None)
+    a._chat = lambda *args, **kw: {"message": {"content": json.dumps(answer)}}
+    m = a.classify(text)
+    assert ((m.command.id, m.slots) if m else None) == expected
+
+
+def test_prompt_echo():
+    p = "Wechsel zu Thunderbird. Öffne Dolphin. Neuer Tab. Arbeitsfläche 2."
+    cat = Catalog()
+    assert cat.is_prompt_echo("Wechsel zu Thunderbird. Öffne Dolphin.", p)
+    assert not cat.is_prompt_echo("Wechsel zu Thunderbird.", p)          # can be a real command
+    assert not cat.is_prompt_echo("Wechsel zu Thunderbird. Öffne Dolphin.", "")  # prompt off
+    # whole words only, and the sentences must follow each other
+    assert not cat.is_prompt_echo("dann neuer tabellenreiter arbeitsfläche 2", p)
+    assert not cat.is_prompt_echo("Öffne Dolphin und dann wechsel zu thunderbird", p)
+
+
+@pytest.mark.parametrize("lang", ["de", "en"])
+def test_shipped_prompt_is_no_command(lang):
+    cat = Catalog()
+    cat.add_toml(config.builtin_commands(lang))
+    assert cat.prompt and cat.is_prompt_echo(cat.prompt, cat.prompt)
+    for sentence in re.split(r"[.!?]", cat.prompt):
+        assert not sentence.strip() or (cat.match(sentence) is None and cat.keyword(sentence) is None)
+
+
+def test_silence_is_dropped():
+    from ultracommand.audio import Recorder
+    r = Recorder(speech_level=400)
+    r._proc, r._reader = None, None
+    for loudest, expected in ((250.0, b""), (900.0, "wav")):
+        r._pcm, r._loudest = bytearray(16000 * 2), loudest
+        r._proc = type("P", (), {"terminate": lambda s: None, "wait": lambda s, timeout=None: 0})()
+        out = r.stop()
+        assert (out[:4] == b"RIFF") if expected == "wav" else out == b""
+
+
+def test_guess_never_picks_destructive(de):
+    import json
+    from ultracommand.assistant import Assistant
+    a = Assistant(copy.deepcopy(config.DEFAULTS), de, executor=None, desktop=None)
+    seen = {}
+    def chat(messages, **kw):
+        seen["ids"] = kw["schema"]["properties"]["command"]["enum"]
+        return {"message": {"content": json.dumps({"command": "window.close", "args": {}})}}
+    a._chat = chat
+    assert a.classify("mach das zu") is None
+    assert "window.close" not in seen["ids"] and "key.enter" not in seen["ids"]
+
+
+def test_guess_number_ambiguous(de):
+    import json
+    from ultracommand.assistant import Assistant
+    a = Assistant(copy.deepcopy(config.DEFAULTS), de, executor=None, desktop=None)
+    a._chat = lambda *x, **kw: {"message": {"content": json.dumps({"command": "move.down", "args": {}})}}
+    assert a.classify("auf desktop 2 drei runter").slots == {"n": 1}
+    assert a.classify("hm ² runter").slots == {"n": 2}          # NFKC: "²" → "2", no crash
+
+
+def test_guess_target_number_must_be_said(de):
+    import json
+    from ultracommand.assistant import Assistant
+    a = Assistant(copy.deepcopy(config.DEFAULTS), de, executor=None, desktop=None)
+    a._chat = lambda *x, **kw: {"message": {"content": json.dumps({"command": "desktop.switch", "args": {"n": 1}})}}
+    assert a.classify("nächste arbeitsfläche") is None              # target missing – no guess
+    assert a.classify("geh mal auf die arbeitsfläche zwei").slots == {"n": 2}
+
+
+def test_prompt_echo_single_sentence(de):
+    assert de.is_prompt_echo("Thunderbird, Dolphin, Kate.", "Thunderbird, Dolphin, Kate")
+    assert not de.is_prompt_echo("Thunderbird", "Thunderbird, Dolphin, Kate")
+
+
+def test_too_short_resets_loudest():
+    from ultracommand.audio import Recorder
+    r = Recorder(speech_level=400)
+    r.loudest = 3000.0
+    r._pcm, r._loudest = bytearray(100), 3000.0
+    r._proc = type("P", (), {"terminate": lambda s: None, "wait": lambda s, timeout=None: 0})()
+    assert r.stop() == b"" and r.loudest == 0.0
+
+
+def test_model_tag():
+    from ultracommand.assistant import _with_tag
+    assert _with_tag("qwen3.5") == "qwen3.5:latest"
+    assert _with_tag("gemma4:12b-it-qat") == "gemma4:12b-it-qat"
+
+
+def test_old_prompt_key_is_honored(tmp_path):
+    f = tmp_path / "c.toml"
+    f.write_text("[whisper]\nprompt_commands = false\n")
+    assert config.load(f)["whisper"]["prompt"] == "off"

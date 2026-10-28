@@ -4,6 +4,7 @@ Nothing here knows a particular language. A command file provides:
 
     [keywords]   assistant / dictate / cancel – words that start an utterance
     [numbers]    number words ("drei" = 3) for {n} slots
+    prompt       context sentence for Whisper (words it would otherwise mishear)
     filler       words dropped before matching ("bitte", "please")
     [synonyms]   word forms unified before matching ("zum" = "zu", "wechsle" = "wechsel")
     ignore       known Whisper hallucinations on silence
@@ -18,6 +19,7 @@ old one, slots/keywords/numbers are merged.
 from __future__ import annotations
 
 import difflib
+import functools
 import re
 import tomllib
 import unicodedata
@@ -36,6 +38,7 @@ MESSAGES = {
     "unknown": "Unknown command: {text}",
     "failed": "Failed: {what}",
     "stt_error": "Speech recognition not reachable",
+    "too_quiet": "Too quiet – nothing heard",
     "assistant_error": "Assistant not reachable: {error}",
     "hotkey_talk": "Talk (hold)",
     "hotkey_dictate": "Dictate (hold)",
@@ -56,6 +59,7 @@ class Command:
     do: list[dict]
     help: str = ""
     llm: bool = True                 # offered to the assistant as a tool
+    guess: bool = True               # may be picked for unaddressed speech (fallback "guess")
 
     @property
     def slots(self) -> list[str]:
@@ -84,6 +88,7 @@ class Catalog:
     synonyms: dict[str, str] = field(default_factory=dict)
     ignore: list[str] = field(default_factory=list)
     fuzzy: float = 0.84
+    prompt: str = ""
     messages: dict[str, str] = field(default_factory=lambda: dict(MESSAGES))
 
     # --- loading ------------------------------------------------------------
@@ -94,6 +99,7 @@ class Catalog:
             self.keywords[k] = [normalize(w) for w in words]
         self.numbers.update({normalize(k): int(v) for k, v in data.get("numbers", {}).items()})
         self.filler += [normalize(w) for w in data.get("filler", [])]
+        self.prompt = data.get("prompt", self.prompt)
         self.synonyms.update({normalize(k): normalize(v) for k, v in data.get("synonyms", {}).items()})
         self.ignore += [normalize(w) for w in data.get("ignore", [])]
         self.messages.update(data.get("messages", {}))
@@ -105,8 +111,8 @@ class Catalog:
             if "id" not in c or not c.get("say") or not do:
                 raise ValueError(f"{source}: command needs id, say and do: {c}")
             say = [c["say"]] if isinstance(c["say"], str) else list(c["say"])
-            self.commands[c["id"]] = Command(id=c["id"], say=say, do=do,
-                                             help=c.get("help", ""), llm=c.get("llm", True))
+            self.commands[c["id"]] = Command(id=c["id"], say=say, do=do, help=c.get("help", ""),
+                                             llm=c.get("llm", True), guess=c.get("guess", True))
 
     # --- matching -----------------------------------------------------------
 
@@ -118,6 +124,18 @@ class Catalog:
     def is_noise(self, text: str) -> bool:
         t = normalize(text)
         return not t or t in self.ignore
+
+    def is_prompt_echo(self, text: str, prompt: str) -> bool:
+        """Whisper repeats its prompt on silence or noise. One sentence of a longer prompt can
+        be a real command; the whole prompt, or two consecutive sentences of it (whole words),
+        are an echo. Partial or reordered echoes are not caught – keep the prompt short."""
+        sentences = _sentences(prompt)
+        if not sentences:
+            return False
+        t = f" {normalize(text)} "
+        if len(sentences) == 1:
+            return t.strip() == sentences[0]
+        return any(f" {a} {b} " in t for a, b in zip(sentences, sentences[1:]))
 
     def keyword(self, text: str) -> tuple[str, str] | None:
         """("assistant", rest) if the utterance starts with a keyword, longest keyword first."""
@@ -178,12 +196,16 @@ class Catalog:
             score = min(score, 0.9 + 0.09 * similarity)   # fuzzy slot < exact slot
         return Match(cmd, slots, score=score)
 
+    def number(self, word: str) -> int | None:
+        """"3" or a number word ("drei") → 3."""
+        if word.isascii() and word.isdigit():       # "²" is a digit to isdigit(), not to int()
+            return int(word)
+        return self.numbers.get(word)
+
     def _resolve(self, name: str, spoken: str) -> tuple[object | None, float]:
         spoken = normalize(spoken)
         if name == "n":
-            if spoken.isdigit():
-                return int(spoken), 1.0
-            return self.numbers.get(spoken), 1.0
+            return self.number(spoken), 1.0
         if name == "text":                      # free text, taken as is
             return spoken, 1.0
         values = self.slot_values.get(name, {})
@@ -196,40 +218,31 @@ class Catalog:
 
     # --- for Whisper and the LLM ---------------------------------------------
 
-    def vocabulary(self, limit: int = 600) -> str:
-        """Command phrases as a Whisper prompt (biases recognition, keep it short)."""
-        seen, words = set(), []
-        for cmd in self.commands.values():
-            for phrase in cmd.say:
-                if SLOT.search(phrase):
-                    continue
-                if phrase not in seen:
-                    seen.add(phrase)
-                    words.append(phrase)
-        for values in self.slot_values.values():
-            words += [v for v in values if v not in seen]
-        return ", ".join(words)[:limit]
-
     def tools(self) -> list[dict]:
         """Commands as Ollama/OpenAI tool definitions."""
         out = []
         for cmd in self.commands.values():
             if not cmd.llm:
                 continue
-            props: dict[str, dict] = {}
-            for s in cmd.slots:
-                if s == "n":
-                    props[s] = {"type": "integer", "description": "how many times / number"}
-                elif s == "text":
-                    props[s] = {"type": "string"}
-                else:
-                    props[s] = {"type": "string", "enum": sorted(set(self.slot_values.get(s, {}).values()))}
+            props = self.slot_schema(cmd)
             out.append({"type": "function", "function": {
                 "name": tool_name(cmd.id),
                 "description": cmd.help or cmd.say[0],
                 "parameters": {"type": "object", "properties": props, "required": list(props)},
             }})
         return out
+
+    def slot_schema(self, cmd: Command) -> dict[str, dict]:
+        """JSON schema of a command's slots – shared by the tools and the guess prompt."""
+        props: dict[str, dict] = {}
+        for s in cmd.slots:
+            if s == "n":
+                props[s] = {"type": "integer", "description": "how many times / number"}
+            elif s == "text":
+                props[s] = {"type": "string"}
+            else:
+                props[s] = {"type": "string", "enum": sorted(set(self.slot_values.get(s, {}).values()))}
+        return props
 
     def by_tool(self, name: str) -> Command | None:
         return next((c for c in self.commands.values() if tool_name(c.id) == name), None)
@@ -239,3 +252,6 @@ def tool_name(command_id: str) -> str:
     return re.sub(r"\W", "_", command_id)
 
 
+@functools.lru_cache(maxsize=8)
+def _sentences(prompt: str) -> tuple[str, ...]:
+    return tuple(x for x in (normalize(p) for p in re.split(r"[.!?]", prompt)) if x)

@@ -6,7 +6,7 @@ Hold a key, speak, let go. Ultra-Command decides what you meant:
 
 1. **A command** from the catalog – *"maximize window"*, *"new tab"*, *"open file manager"*, *"down three"* → keys, KWin actions, programs.
 2. **A keyword first** – *"Computer, …"* sends the rest to a **local LLM** that acts through the same commands; *"Type …"* dictates.
-3. **Anything else** goes to the assistant (configurable: assistant, dictate, or ignore). Dictation: start with *"Type …"* or use the dictate hotkey.
+3. **Anything else** is shown to the LLM, which may pick *one* command for it – or nothing. It cannot act freely here, and a program name only counts if it was really said (*"Karte"* does not open Kate). This is `fallback = "guess"`; alternatives: `assistant` (acts freely), `dictate`, `ignore`. Dictation: start with *"Type …"* or use the dictate hotkey.
 
 Speech recognition is [whisper.cpp](https://github.com/ggml-org/whisper.cpp) on the GPU (~50 ms per utterance with large-v3-turbo on an RTX 5080), the assistant runs on [Ollama](https://ollama.com). Nothing leaves the machine.
 
@@ -95,7 +95,7 @@ talk = "ScrollLock"
 assistant = "Meta+F13"
 
 [route]
-fallback = "assistant"   # or "dictate" or "ignore"
+fallback = "guess"       # or "assistant", "dictate", "ignore"
 
 [llm]
 model = "qwen3.5:9b"
@@ -123,7 +123,7 @@ do = [{ type = "clear" }, { key = "enter" }]
 llm = false                           # not offered to the assistant
 ```
 
-Steps: `key` (with `repeat`, `terminal`), `type`, `run`, `focus` (switch to the program's window, cycle if it is active, start it if not), `kwin` (KWin shortcut name), `shortcut` (`component/name` of any global shortcut), `shell` (output goes back to the assistant), `sleep`, `builtin` (`repeat`, `cancel`).
+Steps: `key` (with `repeat`, `terminal`), `type`, `run`, `focus` (switch to the program's window, cycle if it is active, start it if not), `minimize` (the program's window), `kwin` (KWin shortcut name), `shortcut` (`component/name` of any global shortcut), `shell` (output goes back to the assistant), `sleep`, `builtin` (`repeat`, `cancel`).
 Slots: `{n}` is a number (digits or number words), `{text}` free text, anything else comes from `[slots.<name>]` and is matched fuzzily. Phrases match after removing punctuation and filler words; small recognition errors are tolerated (`route.fuzzy`).
 
 ### Another language

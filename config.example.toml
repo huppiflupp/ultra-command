@@ -8,12 +8,13 @@ dictate = ""
 assistant = ""
 
 [route]
-fallback = "assistant"          # speech that is no command: "assistant", "dictate" or "ignore"
+fallback = "guess"              # no command: "guess" (LLM picks one command or nothing),
+                                # "assistant" (LLM acts freely), "dictate" or "ignore"
 fuzzy = 0.84                    # how close a phrase must be (0..1)
 
 [whisper]
 url = "http://127.0.0.1:8097/inference"
-prompt_commands = false         # bias towards command phrases (Whisper then imitates the list style)
+prompt = ""                     # "" = context sentence of the language file, "off", or your own sentences
 
 [llm]
 url = "http://127.0.0.1:11434"

@@ -55,7 +55,7 @@ def cmd_commands(cfg: dict, args) -> None:
 def cmd_transcribe(cfg: dict, args) -> None:
     from . import stt
     from .daemon import load_catalog
-    prompt = load_catalog(cfg).vocabulary() if args.prompt else ""
+    prompt = config.whisper_prompt(cfg, load_catalog(cfg).prompt) if args.prompt else ""
     print(stt.transcribe(Path(args.wav).read_bytes(), cfg["whisper"]["url"], cfg["language"], prompt))
 
 
@@ -116,7 +116,7 @@ def main() -> None:
     sub.add_parser("windows", help="windows as the running daemon sees them")
     p = sub.add_parser("transcribe", help="transcribe a 16 kHz WAV file")
     p.add_argument("wav")
-    p.add_argument("--prompt", action="store_true", help="bias towards command phrases")
+    p.add_argument("--prompt", action="store_true", help="use the context sentence, as the daemon does")
     sub.add_parser("check", help="check that everything ultra-command needs is there")
     args = ap.parse_args()
     cfg = config.load(args.config)
