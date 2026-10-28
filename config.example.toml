@@ -1,0 +1,34 @@
+# ~/.config/ultra-command/config.toml – every key is optional.
+
+language = "de"                 # selects commands-<language>.toml and Whisper's language
+
+[hotkeys]                       # hold to talk; "" = not registered. Change later in System Settings.
+talk = "ScrollLock"
+dictate = ""
+assistant = ""
+
+[route]
+fallback = "dictate"            # speech that is no command: "dictate", "assistant" or "ignore"
+fuzzy = 0.84                    # how close a phrase must be (0..1)
+
+[whisper]
+url = "http://127.0.0.1:8097/inference"
+prompt_commands = true          # bias recognition towards command phrases
+
+[llm]
+url = "http://127.0.0.1:11434"
+model = "gemma4:12b-it-qat"
+keep_alive = "30m"              # how long the model stays in VRAM
+max_steps = 6
+memory_seconds = 120
+
+[input]
+layout = ""                     # "" = same as language (de swaps Y/Z for ydotool)
+paste_key = "ctrl+v"
+terminal_paste_key = "ctrl+shift+v"
+
+[feedback]
+osd = true
+notify_seconds = 8
+
+# commands = ["~/.config/ultra-command/commands.toml", "~/my-more-commands.toml"]

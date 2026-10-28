@@ -1,0 +1,14 @@
+[Unit]
+Description=Ultra-Command – voice control for the desktop
+Documentation=https://github.com/huppiflupp/ultra-command
+PartOf=graphical-session.target
+After=graphical-session.target ydotoold.service ultra-command-whisper.service
+Wants=ydotoold.service ultra-command-whisper.service
+
+[Service]
+ExecStart=%h/projects/ultra-command/.venv/bin/ultra-command run
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

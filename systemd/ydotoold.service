@@ -1,0 +1,11 @@
+[Unit]
+Description=ydotoold – virtual keyboard for Ultra-Command
+# Needs write access to /dev/uinput for the user (udev rule or ACL, see README).
+
+[Service]
+ExecStart=/usr/bin/ydotoold --socket-path=%t/.ydotool_socket --socket-own=%U:%G
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

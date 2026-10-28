@@ -1,0 +1,379 @@
+# Ultra-Command – deutsche Befehle.
+# Eigene Befehle gehören nach ~/.config/ultra-command/commands.toml (gleiches Format,
+# gleiche id ersetzt einen Befehl von hier). Probelauf: ultra-command match "fenster maximieren"
+
+filler = ["bitte", "mal", "doch", "jetzt", "einfach", "der", "die", "das", "den", "dem", "ein", "eine", "einen"]
+
+# Was Whisper bei Stille gern erfindet.
+ignore = [
+  "untertitel im auftrag des zdf für funk 2017",
+  "untertitel im auftrag des zdf 2017",
+  "untertitel der amara org community",
+  "untertitelung des zdf 2020",
+  "vielen dank fürs zuschauen",
+  "vielen dank für ihre aufmerksamkeit",
+  "bis zum nächsten mal",
+  "tschüss",
+  "amen",
+]
+
+[keywords]
+# Am Satzanfang: alles danach geht an …
+assistant = ["computer", "ki", "lokale ki", "ki lokal", "assistent", "hey computer"]
+dictate = ["schreib", "schreibe", "tippe", "diktat"]
+cancel = ["abbrechen", "vergiss es", "egal"]
+
+[messages]
+listening_talk = "🎙 Ich höre …"
+listening_dictate = "🎙 Diktat …"
+listening_assistant = "🎙 Frage an die KI …"
+thinking = "🤖 Denke nach …"
+say_more = "Ja?"
+cancelled = "Abgebrochen"
+unknown = "Unbekannter Befehl: {text}"
+failed = "Fehlgeschlagen: {what}"
+stt_error = "Spracherkennung nicht erreichbar"
+assistant_error = "KI nicht erreichbar: {error}"
+hotkey_talk = "Sprechen (halten)"
+hotkey_dictate = "Diktieren (halten)"
+hotkey_assistant = "KI fragen (halten)"
+
+[numbers]
+ein = 1
+eine = 1
+einen = 1
+eins = 1
+einmal = 1
+zwei = 2
+zweimal = 2
+drei = 3
+dreimal = 3
+vier = 4
+"fünf" = 5
+sechs = 6
+sieben = 7
+acht = 8
+neun = 9
+zehn = 10
+elf = 11
+"zwölf" = 12
+"fünfzehn" = 15
+zwanzig = 20
+
+[slots.app]
+browser = "google-chrome"
+chrome = "google-chrome"
+firefox = "firefox"
+"mail" = "thunderbird"
+"e mail" = "thunderbird"
+thunderbird = "thunderbird"
+dateimanager = "dolphin"
+dateien = "dolphin"
+dolphin = "dolphin"
+terminal = "konsole"
+konsole = "konsole"
+editor = "kate"
+kate = "kate"
+rechner = "kcalc"
+taschenrechner = "kcalc"
+einstellungen = "systemsettings"
+systemeinstellungen = "systemsettings"
+screenshot = "spectacle"
+bildschirmfoto = "spectacle"
+"vs code" = "code"
+code = "code"
+
+# --- Fenster -----------------------------------------------------------------
+
+[[command]]
+id = "window.maximize"
+say = ["fenster maximieren", "maximieren", "fenster groß"]
+do = { kwin = "Window Maximize" }
+help = "Maximize or restore the active window"
+
+[[command]]
+id = "window.minimize"
+say = ["fenster minimieren", "minimieren", "fenster weg"]
+do = { kwin = "Window Minimize" }
+help = "Minimize the active window"
+
+[[command]]
+id = "window.close"
+say = ["fenster schließen"]
+do = { kwin = "Window Close" }
+help = "Close the active window"
+
+[[command]]
+id = "window.fullscreen"
+say = ["vollbild"]
+do = { kwin = "Window Fullscreen" }
+help = "Toggle fullscreen of the active window"
+
+[[command]]
+id = "window.tile_left"
+say = ["fenster links", "nach links andocken"]
+do = { kwin = "Window Quick Tile Left" }
+help = "Tile the active window to the left half"
+
+[[command]]
+id = "window.tile_right"
+say = ["fenster rechts", "nach rechts andocken"]
+do = { kwin = "Window Quick Tile Right" }
+help = "Tile the active window to the right half"
+
+[[command]]
+id = "window.next_screen"
+say = ["anderer bildschirm", "auf den anderen bildschirm", "nächster bildschirm"]
+do = { kwin = "Window to Next Screen" }
+help = "Move the active window to the next screen"
+
+[[command]]
+id = "window.switch"
+say = ["fenster wechseln", "nächstes fenster"]
+do = { key = "alt+tab" }
+help = "Switch to the previously used window"
+
+[[command]]
+id = "desktop.overview"
+say = ["übersicht", "alle fenster"]
+do = { kwin = "Overview" }
+help = "Show the overview of all windows"
+
+[[command]]
+id = "desktop.show"
+say = ["desktop anzeigen", "schreibtisch"]
+do = { kwin = "Show Desktop" }
+help = "Show the desktop (minimize everything)"
+
+[[command]]
+id = "desktop.switch"
+say = ["desktop {n}", "arbeitsfläche {n}"]
+do = { kwin = "Switch to Desktop {n}" }
+help = "Switch to virtual desktop number n"
+
+[[command]]
+id = "app.open"
+say = ["öffne {app}", "starte {app}", "{app} öffnen", "{app} starten"]
+do = { run = "{app}" }
+help = "Start an application"
+
+# --- Tabs und Browser -----------------------------------------------------------
+
+[[command]]
+id = "tab.new"
+say = ["neuer tab", "neues tab", "tab auf"]
+do = { key = "ctrl+t", terminal = "ctrl+shift+t" }
+help = "Open a new tab"
+
+[[command]]
+id = "tab.close"
+say = ["tab schließen", "tab zu"]
+do = { key = "ctrl+w", terminal = "ctrl+shift+w" }
+help = "Close the current tab"
+
+[[command]]
+id = "tab.next"
+say = ["nächster tab", "tab weiter"]
+do = { key = "ctrl+tab" }
+help = "Go to the next tab"
+
+[[command]]
+id = "tab.previous"
+say = ["vorheriger tab", "tab zurück"]
+do = { key = "ctrl+shift+tab" }
+help = "Go to the previous tab"
+
+[[command]]
+id = "tab.reopen"
+say = ["tab wiederherstellen", "tab wieder öffnen"]
+do = { key = "ctrl+shift+t" }
+help = "Reopen the last closed tab"
+
+[[command]]
+id = "page.reload"
+say = ["neu laden", "aktualisieren"]
+do = { key = "f5" }
+help = "Reload the page"
+
+[[command]]
+id = "page.back"
+say = ["zurück", "seite zurück"]
+do = { key = "alt+left" }
+help = "Go back (browser history)"
+
+[[command]]
+id = "page.forward"
+say = ["vorwärts", "seite vor"]
+do = { key = "alt+right" }
+help = "Go forward (browser history)"
+
+# --- Bearbeiten ---------------------------------------------------------------------
+
+[[command]]
+id = "edit.copy"
+say = ["kopieren", "kopiere das"]
+do = { key = "ctrl+c", terminal = "ctrl+shift+c" }
+help = "Copy the selection"
+
+[[command]]
+id = "edit.cut"
+say = ["ausschneiden"]
+do = { key = "ctrl+x", terminal = "ctrl+shift+x" }
+help = "Cut the selection"
+
+[[command]]
+id = "edit.paste"
+say = ["einfügen"]
+do = { key = "ctrl+v", terminal = "ctrl+shift+v" }
+help = "Paste the clipboard"
+
+[[command]]
+id = "edit.select_all"
+say = ["alles markieren", "alles auswählen"]
+do = { key = "ctrl+a" }
+help = "Select all"
+
+[[command]]
+id = "edit.undo"
+say = ["rückgängig", "rückgängig machen"]
+do = { key = "ctrl+z" }
+help = "Undo"
+
+[[command]]
+id = "edit.redo"
+say = ["wiederherstellen"]
+do = { key = "ctrl+shift+z" }
+help = "Redo"
+
+[[command]]
+id = "edit.save"
+say = ["speichern"]
+do = { key = "ctrl+s" }
+help = "Save"
+
+[[command]]
+id = "edit.find"
+say = ["suchen", "suche"]
+do = { key = "ctrl+f", terminal = "ctrl+shift+f" }
+help = "Open the search"
+
+[[command]]
+id = "edit.delete_word"
+say = ["wort löschen"]
+do = { key = "ctrl+backspace" }
+help = "Delete the word before the cursor"
+
+[[command]]
+id = "edit.delete_words"
+say = ["{n} wörter löschen"]
+do = { key = "ctrl+backspace", repeat = "{n}" }
+help = "Delete n words before the cursor"
+
+# --- Tasten und Bewegen ---------------------------------------------------------------
+
+[[command]]
+id = "key.enter"
+say = ["enter", "eingabe", "absenden", "neue zeile"]
+do = { key = "enter" }
+help = "Press Enter"
+
+[[command]]
+id = "key.escape"
+say = ["escape", "esc"]
+do = { key = "esc" }
+help = "Press Escape"
+
+[[command]]
+id = "key.tab"
+say = ["tabulator", "tab taste"]
+do = { key = "tab" }
+help = "Press Tab"
+
+[[command]]
+id = "key.backspace"
+say = ["rücktaste", "zeichen löschen"]
+do = { key = "backspace" }
+help = "Delete the character before the cursor"
+
+[[command]]
+id = "move.down"
+say = ["runter", "nach unten", "runter {n}", "{n} runter"]
+do = { key = "down", repeat = "{n}" }
+help = "Arrow down, n times"
+
+[[command]]
+id = "move.up"
+say = ["hoch", "nach oben", "hoch {n}", "{n} hoch"]
+do = { key = "up", repeat = "{n}" }
+help = "Arrow up, n times"
+
+[[command]]
+id = "move.page_down"
+say = ["seite runter", "weiter runter", "bild runter"]
+do = { key = "pagedown" }
+help = "Page down"
+
+[[command]]
+id = "move.page_up"
+say = ["seite hoch", "bild hoch"]
+do = { key = "pageup" }
+help = "Page up"
+
+[[command]]
+id = "move.top"
+say = ["ganz oben", "zum anfang"]
+do = { key = "ctrl+home" }
+help = "Jump to the top"
+
+[[command]]
+id = "move.bottom"
+say = ["ganz unten", "zum ende"]
+do = { key = "ctrl+end" }
+help = "Jump to the bottom"
+
+# --- Medien -------------------------------------------------------------------------------
+
+[[command]]
+id = "media.playpause"
+say = ["pause", "abspielen", "play", "musik weiter"]
+do = { key = "playpause" }
+help = "Play or pause media"
+
+[[command]]
+id = "media.next"
+say = ["nächstes lied", "nächster titel"]
+do = { key = "nextsong" }
+help = "Next track"
+
+[[command]]
+id = "media.previous"
+say = ["vorheriges lied", "letzter titel"]
+do = { key = "previoussong" }
+help = "Previous track"
+
+[[command]]
+id = "volume.up"
+say = ["lauter", "lauter {n}"]
+do = { key = "volumeup", repeat = "{n}" }
+help = "Volume up, n steps"
+
+[[command]]
+id = "volume.down"
+say = ["leiser", "leiser {n}"]
+do = { key = "volumedown", repeat = "{n}" }
+help = "Volume down, n steps"
+
+[[command]]
+id = "volume.mute"
+say = ["stumm", "ton aus", "ton an"]
+do = { key = "mute" }
+help = "Toggle mute"
+
+# --- Ultra-Command selbst ------------------------------------------------------------
+
+[[command]]
+id = "uc.repeat"
+say = ["nochmal", "noch einmal", "wiederholen"]
+do = { builtin = "repeat" }
+help = "Repeat the previous voice command"
+llm = false

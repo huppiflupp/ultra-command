@@ -1,0 +1,331 @@
+# Ultra-Command – English commands.
+# Your own commands go into ~/.config/ultra-command/commands.toml (same format,
+# the same id replaces a command from here). Dry run: ultra-command match "maximize window"
+
+filler = ["please", "now", "just", "the", "a", "an"]
+
+# What Whisper likes to invent on silence.
+ignore = ["thank you", "thanks for watching", "thank you for watching", "you", "bye"]
+
+[keywords]
+# At the start of an utterance: everything after it goes to …
+assistant = ["computer", "assistant", "hey computer", "local ai"]
+dictate = ["type", "write", "dictate"]
+cancel = ["cancel", "never mind", "forget it"]
+
+[numbers]
+one = 1
+two = 2
+three = 3
+four = 4
+five = 5
+six = 6
+seven = 7
+eight = 8
+nine = 9
+ten = 10
+eleven = 11
+twelve = 12
+once = 1
+twice = 2
+fifteen = 15
+twenty = 20
+
+[slots.app]
+"browser" = "google-chrome"
+"chrome" = "google-chrome"
+"firefox" = "firefox"
+"mail" = "thunderbird"
+"email" = "thunderbird"
+"files" = "dolphin"
+"file manager" = "dolphin"
+"terminal" = "konsole"
+"editor" = "kate"
+"calculator" = "kcalc"
+"settings" = "systemsettings"
+"system settings" = "systemsettings"
+"screenshot" = "spectacle"
+"vs code" = "code"
+
+[[command]]
+id = "window.maximize"
+say = ["maximize window", "maximize", "make it bigger"]
+do = { kwin = "Window Maximize" }
+help = "Maximize or restore the active window"
+
+[[command]]
+id = "window.minimize"
+say = ["minimize window", "minimize", "hide window"]
+do = { kwin = "Window Minimize" }
+help = "Minimize the active window"
+
+[[command]]
+id = "window.close"
+say = ["close window"]
+do = { kwin = "Window Close" }
+help = "Close the active window"
+
+[[command]]
+id = "window.fullscreen"
+say = ["fullscreen", "full screen"]
+do = { kwin = "Window Fullscreen" }
+help = "Toggle fullscreen of the active window"
+
+[[command]]
+id = "window.tile_left"
+say = ["window left", "tile left", "snap left"]
+do = { kwin = "Window Quick Tile Left" }
+help = "Tile the active window to the left half"
+
+[[command]]
+id = "window.tile_right"
+say = ["window right", "tile right", "snap right"]
+do = { kwin = "Window Quick Tile Right" }
+help = "Tile the active window to the right half"
+
+[[command]]
+id = "window.next_screen"
+say = ["other screen", "next screen", "move to other screen"]
+do = { kwin = "Window to Next Screen" }
+help = "Move the active window to the next screen"
+
+[[command]]
+id = "window.switch"
+say = ["switch window", "next window"]
+do = { key = "alt+tab" }
+help = "Switch to the previously used window"
+
+[[command]]
+id = "desktop.overview"
+say = ["overview", "show all windows"]
+do = { kwin = "Overview" }
+help = "Show the overview of all windows"
+
+[[command]]
+id = "desktop.show"
+say = ["show desktop"]
+do = { kwin = "Show Desktop" }
+help = "Show the desktop (minimize everything)"
+
+[[command]]
+id = "desktop.switch"
+say = ["desktop {n}", "workspace {n}"]
+do = { kwin = "Switch to Desktop {n}" }
+help = "Switch to virtual desktop number n"
+
+[[command]]
+id = "app.open"
+say = ["open {app}", "start {app}", "launch {app}"]
+do = { run = "{app}" }
+help = "Start an application"
+
+[[command]]
+id = "tab.new"
+say = ["new tab"]
+do = { key = "ctrl+t", terminal = "ctrl+shift+t" }
+help = "Open a new tab"
+
+[[command]]
+id = "tab.close"
+say = ["close tab"]
+do = { key = "ctrl+w", terminal = "ctrl+shift+w" }
+help = "Close the current tab"
+
+[[command]]
+id = "tab.next"
+say = ["next tab"]
+do = { key = "ctrl+tab" }
+help = "Go to the next tab"
+
+[[command]]
+id = "tab.previous"
+say = ["previous tab"]
+do = { key = "ctrl+shift+tab" }
+help = "Go to the previous tab"
+
+[[command]]
+id = "tab.reopen"
+say = ["reopen tab", "restore tab"]
+do = { key = "ctrl+shift+t" }
+help = "Reopen the last closed tab"
+
+[[command]]
+id = "page.reload"
+say = ["reload", "refresh"]
+do = { key = "f5" }
+help = "Reload the page"
+
+[[command]]
+id = "page.back"
+say = ["go back", "back"]
+do = { key = "alt+left" }
+help = "Go back (browser history)"
+
+[[command]]
+id = "page.forward"
+say = ["go forward", "forward"]
+do = { key = "alt+right" }
+help = "Go forward (browser history)"
+
+[[command]]
+id = "edit.copy"
+say = ["copy", "copy that"]
+do = { key = "ctrl+c", terminal = "ctrl+shift+c" }
+help = "Copy the selection"
+
+[[command]]
+id = "edit.cut"
+say = ["cut", "cut that"]
+do = { key = "ctrl+x", terminal = "ctrl+shift+x" }
+help = "Cut the selection"
+
+[[command]]
+id = "edit.paste"
+say = ["paste"]
+do = { key = "ctrl+v", terminal = "ctrl+shift+v" }
+help = "Paste the clipboard"
+
+[[command]]
+id = "edit.select_all"
+say = ["select all"]
+do = { key = "ctrl+a" }
+help = "Select all"
+
+[[command]]
+id = "edit.undo"
+say = ["undo", "undo that"]
+do = { key = "ctrl+z" }
+help = "Undo"
+
+[[command]]
+id = "edit.redo"
+say = ["redo"]
+do = { key = "ctrl+shift+z" }
+help = "Redo"
+
+[[command]]
+id = "edit.save"
+say = ["save", "save file"]
+do = { key = "ctrl+s" }
+help = "Save"
+
+[[command]]
+id = "edit.find"
+say = ["find", "search"]
+do = { key = "ctrl+f", terminal = "ctrl+shift+f" }
+help = "Open the search"
+
+[[command]]
+id = "edit.delete_word"
+say = ["delete word"]
+do = { key = "ctrl+backspace" }
+help = "Delete the word before the cursor"
+
+[[command]]
+id = "edit.delete_words"
+say = ["delete {n} words"]
+do = { key = "ctrl+backspace", repeat = "{n}" }
+help = "Delete n words before the cursor"
+
+[[command]]
+id = "key.enter"
+say = ["enter", "press enter", "submit", "new line"]
+do = { key = "enter" }
+help = "Press Enter"
+
+[[command]]
+id = "key.escape"
+say = ["escape"]
+do = { key = "esc" }
+help = "Press Escape"
+
+[[command]]
+id = "key.tab"
+say = ["tab key", "press tab"]
+do = { key = "tab" }
+help = "Press Tab"
+
+[[command]]
+id = "key.backspace"
+say = ["backspace"]
+do = { key = "backspace" }
+help = "Delete the character before the cursor"
+
+[[command]]
+id = "move.down"
+say = ["down", "go down", "down {n}"]
+do = { key = "down", repeat = "{n}" }
+help = "Arrow down, n times"
+
+[[command]]
+id = "move.up"
+say = ["up", "go up", "up {n}"]
+do = { key = "up", repeat = "{n}" }
+help = "Arrow up, n times"
+
+[[command]]
+id = "move.page_down"
+say = ["page down", "scroll down"]
+do = { key = "pagedown" }
+help = "Page down"
+
+[[command]]
+id = "move.page_up"
+say = ["page up", "scroll up"]
+do = { key = "pageup" }
+help = "Page up"
+
+[[command]]
+id = "move.top"
+say = ["go to top", "top"]
+do = { key = "ctrl+home" }
+help = "Jump to the top"
+
+[[command]]
+id = "move.bottom"
+say = ["go to bottom", "bottom"]
+do = { key = "ctrl+end" }
+help = "Jump to the bottom"
+
+[[command]]
+id = "media.playpause"
+say = ["pause", "play", "pause music", "resume"]
+do = { key = "playpause" }
+help = "Play or pause media"
+
+[[command]]
+id = "media.next"
+say = ["next song", "next track"]
+do = { key = "nextsong" }
+help = "Next track"
+
+[[command]]
+id = "media.previous"
+say = ["previous song", "previous track"]
+do = { key = "previoussong" }
+help = "Previous track"
+
+[[command]]
+id = "volume.up"
+say = ["louder", "volume up", "louder {n}"]
+do = { key = "volumeup", repeat = "{n}" }
+help = "Volume up, n steps"
+
+[[command]]
+id = "volume.down"
+say = ["quieter", "volume down", "quieter {n}"]
+do = { key = "volumedown", repeat = "{n}" }
+help = "Volume down, n steps"
+
+[[command]]
+id = "volume.mute"
+say = ["mute", "unmute"]
+do = { key = "mute" }
+help = "Toggle mute"
+
+[[command]]
+id = "uc.repeat"
+say = ["again", "repeat that", "one more time"]
+do = { builtin = "repeat" }
+help = "Repeat the previous voice command"
+llm = false

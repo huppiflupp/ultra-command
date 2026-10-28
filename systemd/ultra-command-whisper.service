@@ -1,0 +1,14 @@
+[Unit]
+Description=whisper.cpp server on the GPU for Ultra-Command (port 8097)
+# Adjust the paths to your whisper.cpp build and model.
+
+[Service]
+Environment=WHISPER=/data/llm/whisper.cpp
+ExecStart=/bin/sh -c 'exec "$WHISPER/build-cuda/bin/whisper-server" -t 4 --vad \
+  -vm "$WHISPER/models/ggml-silero-v6.2.0.bin" -m "$WHISPER/models/ggml-large-v3-turbo-q8_0.bin" \
+  --host 127.0.0.1 --port 8097'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
