@@ -6,6 +6,7 @@ Step forms (one key per table, several tables = several steps in order):
                                          optional terminal = "ctrl+shift+t" (used in terminals)
     {type = "Hello {text}"}              type text (via clipboard)
     {run = "dolphin"}                    start a program, detached
+    {focus = "konsole"}                  switch to its window (next one if active), else start it
     {kwin = "Window Maximize"}           KWin global shortcut by name
     {shortcut = "plasmashell/activate application launcher"}   any global shortcut
     {shell = "playerctl next"}           shell command; its output goes back to the assistant
@@ -75,6 +76,8 @@ class Executor:
             d.type_text(str(step["type"]))
         elif "run" in step:
             d.run(step["run"])
+        elif "focus" in step:
+            return d.focus(step["focus"])
         elif "kwin" in step:
             d.shortcut("kwin", step["kwin"])
         elif "shortcut" in step:

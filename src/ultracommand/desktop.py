@@ -6,10 +6,12 @@ private D-Bus connection, the main loop keeps the shared one.
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 
@@ -22,6 +24,22 @@ class DesktopError(RuntimeError):
     pass
 
 
+def load_kwin_script(bus: dbus.Bus, path: str, name: str) -> None:
+    """(Re)loads a KWin script under `name` and runs it."""
+    scripting = dbus.Interface(bus.get_object("org.kde.KWin", "/Scripting"), "org.kde.kwin.Scripting")
+    if scripting.isScriptLoaded(name):
+        scripting.unloadScript(name)
+    sid = scripting.loadScript(path, name, signature="ss")      # overloaded: pick (path, name)
+    dbus.Interface(bus.get_object("org.kde.KWin", f"/Scripting/Script{sid}"), "org.kde.kwin.Script").run()
+
+
+def unload_kwin_script(bus: dbus.Bus, name: str) -> None:
+    try:
+        dbus.Interface(bus.get_object("org.kde.KWin", "/Scripting"), "org.kde.kwin.Scripting").unloadScript(name)
+    except dbus.DBusException:
+        pass
+
+
 class Desktop:
     def __init__(self, cfg: dict):
         self.cfg = cfg
@@ -32,9 +50,9 @@ class Desktop:
             "YDOTOOL_SOCKET", f"/run/user/{os.getuid()}/.ydotool_socket")
         self._bus: dbus.Bus | None = None
         self._notify_id = 0
-        # Set by the KWin script (see daemon.py) whenever the active window changes.
-        self.window_class = ""
-        self.window_caption = ""
+        # Reported by the KWin script (data/active_window.js) on every window change:
+        # [{"id", "cls", "caption", "active"}], in KWin's stacking order.
+        self.windows: list[dict] = []
         self._lock = threading.Lock()
 
     @property
@@ -66,6 +84,21 @@ class Desktop:
             raise DesktopError(f"ydotool: {e}") from e
         if res.returncode != 0 or "failed to connect" in res.stderr.lower():
             raise DesktopError(f"ydotool: {res.stderr.strip() or res.returncode} (is ydotoold running?)")
+
+    def set_windows(self, data: str) -> None:
+        self.windows = json.loads(data)
+
+    @property
+    def active_window(self) -> dict:
+        return next((w for w in self.windows if w["active"]), {"id": "", "cls": "", "caption": ""})
+
+    @property
+    def window_class(self) -> str:
+        return self.active_window["cls"]
+
+    @property
+    def window_caption(self) -> str:
+        return self.active_window["caption"]
 
     def is_terminal(self) -> bool:
         return self.window_class.lower() in {t.lower() for t in self.cfg["input"]["terminals"]}
@@ -107,6 +140,60 @@ class Desktop:
         if name not in names:
             raise DesktopError(f"no global shortcut {name!r} in {component}")
         self._call("org.kde.kglobalaccel", path, "org.kde.kglobalaccel.Component", "invokeShortcut", name)
+
+    # --- windows ---------------------------------------------------------------------
+
+    def activate(self, window_id: str) -> None:
+        """Activates a window by its KWin id, via a one-shot KWin script."""
+        js = ("for (const w of workspace.windowList()) {\n"
+              f"  if (w.internalId.toString() === {json.dumps(window_id)}) {{\n"
+              "    if (w.minimized) w.minimized = false;\n"
+              "    workspace.activeWindow = w;\n  }\n}\n")
+        name = "ultra-command-activate"
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as f:
+            f.write(js)
+        try:
+            load_kwin_script(self.bus, f.name, name)
+            # KWin runs the script asynchronously; the window script reports the result.
+            deadline = time.monotonic() + 1.5
+            while self.active_window["id"] != window_id and time.monotonic() < deadline:
+                time.sleep(0.05)
+        except dbus.DBusException as e:
+            raise DesktopError(f"KWin: {e.get_dbus_message()}") from e
+        finally:
+            unload_kwin_script(self.bus, name)
+            os.unlink(f.name)
+        if self.active_window["id"] != window_id:
+            raise DesktopError(f"window {window_id} was not activated (closed?)")
+
+    def windows_of(self, app: str) -> list[dict]:
+        """Windows whose class belongs to a program ("konsole" → "org.kde.konsole").
+
+        For "flatpak run org.foo.App" the app id is used. The class must be the
+        program name itself or end in ".<name>" – no substring matches.
+        """
+        argv = shlex.split(app)
+        if not argv:
+            return []
+        name = next((a for a in reversed(argv) if "." in a), argv[0]) if argv[0] == "flatpak" else argv[0]
+        name = os.path.basename(name).lower()
+        short = name.rsplit(".", 1)[-1]
+        return [w for w in self.windows
+                if w["cls"].lower() in (name, short) or w["cls"].lower().rsplit(".", 1)[-1] == short]
+
+    def focus(self, app: str) -> str:
+        """Switches to the program's window; cycles if it is already active; starts it if it has none."""
+        if not self.windows:
+            # Empty list = the KWin script has not reported (yet) – starting would duplicate windows.
+            raise DesktopError("window list unknown (KWin script not loaded?)")
+        wins = self.windows_of(app)
+        if not wins:
+            self.run(app)
+            return f"{app} was not running, started it"
+        current = next((i for i, w in enumerate(wins) if w["active"]), None)
+        target = wins[(current + 1) % len(wins)] if current is not None else wins[-1]
+        self.activate(target["id"])
+        return f"activated {target['caption']!r}"
 
     # --- programs ------------------------------------------------------------------
 

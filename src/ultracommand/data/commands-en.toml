@@ -40,6 +40,8 @@ twenty = 20
 "files" = "dolphin"
 "file manager" = "dolphin"
 "terminal" = "konsole"
+"console" = "konsole"
+"shell" = "konsole"
 "editor" = "kate"
 "calculator" = "kcalc"
 "settings" = "systemsettings"
@@ -112,6 +114,12 @@ id = "desktop.switch"
 say = ["desktop {n}", "workspace {n}"]
 do = { kwin = "Switch to Desktop {n}" }
 help = "Switch to virtual desktop number n"
+
+[[command]]
+id = "window.focus"
+say = ["switch to {app}", "go to {app}", "next {app}", "other {app}", "{app}"]
+do = { focus = "{app}" }
+help = "Switch to the window of an application (the next one if it is already active); start it if it is not running"
 
 [[command]]
 id = "app.open"

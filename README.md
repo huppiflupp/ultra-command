@@ -6,7 +6,7 @@ Hold a key, speak, let go. Ultra-Command decides what you meant:
 
 1. **A command** from the catalog – *"maximize window"*, *"new tab"*, *"open file manager"*, *"down three"* → keys, KWin actions, programs.
 2. **A keyword first** – *"Computer, …"* sends the rest to a **local LLM** that acts through the same commands; *"Type …"* dictates.
-3. **Anything else** is dictated into the active window (configurable: dictate, ask the LLM, or ignore).
+3. **Anything else** goes to the assistant (configurable: assistant, dictate, or ignore). Dictation: start with *"Type …"* or use the dictate hotkey.
 
 Speech recognition is [whisper.cpp](https://github.com/ggml-org/whisper.cpp) on the GPU (~50 ms per utterance with large-v3-turbo on an RTX 5080), the assistant runs on [Ollama](https://ollama.com). Nothing leaves the machine.
 
@@ -14,10 +14,10 @@ It was built for working with tendonitis – fewer keystrokes, fewer mouse moves
 
 ## The assistant acts, and sees what happened
 
-The catalog commands are offered to the LLM as tools, plus `type_text`, `get_clipboard` and `get_active_window`. Every tool call is executed and its result – or its error – goes back to the model, which then continues, tries something else or answers in one sentence (shown as a notification). This loop is what makes requests like these possible:
+The catalog commands are offered to the LLM as tools, plus `type_text`, `get_clipboard`, `list_windows` and `focus_window`. Every tool call is executed and its result – or its error – goes back to the model, which then continues, tries something else or answers in one sentence (shown as a notification). This loop is what makes requests like these possible:
 
 - *"Computer, put this window on the other screen and make it full screen"* – two tool calls in sequence.
-- *"Computer, which window is active?"* – the model asks `get_active_window` and answers from the result.
+- *"Computer, which windows are open?"* – the model asks `list_windows` and answers from the result.
 - *"Computer, summarize what I copied"* – `get_clipboard`, then an answer.
 - *"Computer, open the mail program"* – if a program is missing, the error comes back and the model can say so instead of pretending.
 
@@ -95,7 +95,7 @@ talk = "ScrollLock"
 assistant = "Meta+F13"
 
 [route]
-fallback = "dictate"     # or "assistant" or "ignore"
+fallback = "assistant"   # or "dictate" or "ignore"
 
 [llm]
 model = "qwen3.5:9b"
@@ -123,7 +123,7 @@ do = [{ type = "clear" }, { key = "enter" }]
 llm = false                           # not offered to the assistant
 ```
 
-Steps: `key` (with `repeat`, `terminal`), `type`, `run`, `kwin` (KWin shortcut name), `shortcut` (`component/name` of any global shortcut), `shell` (output goes back to the assistant), `sleep`, `builtin` (`repeat`, `cancel`).
+Steps: `key` (with `repeat`, `terminal`), `type`, `run`, `focus` (switch to the program's window, cycle if it is active, start it if not), `kwin` (KWin shortcut name), `shortcut` (`component/name` of any global shortcut), `shell` (output goes back to the assistant), `sleep`, `builtin` (`repeat`, `cancel`).
 Slots: `{n}` is a number (digits or number words), `{text}` free text, anything else comes from `[slots.<name>]` and is matched fuzzily. Phrases match after removing punctuation and filler words; small recognition errors are tolerated (`route.fuzzy`).
 
 ### Another language
@@ -132,7 +132,9 @@ Copy `commands-en.toml` to `commands-<code>.toml`, translate `say`, `keywords`, 
 
 ## Status and ideas
 
-Working: push-to-talk, commands with slots, dictation, the assistant tool loop, terminal-aware keys, OSD/notification feedback.
+Working: push-to-talk, commands with slots, window switching by voice, dictation, the assistant tool loop, terminal-aware keys, OSD/notification feedback.
+
+To tune recognition with your own voice and microphone, set `audio.keep_recordings = 50`: the last recordings and their transcripts are then kept in `~/.cache/ultra-command/recordings/` (never in dictation mode). Off by default.
 
 Next:
 - **Eye tracking with a webcam** – focus the window you look at (left/right screen, quadrants), so *"copy"* goes where your eyes are.

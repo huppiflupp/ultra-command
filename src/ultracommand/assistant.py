@@ -37,8 +37,12 @@ EXTRA_TOOLS = [
         "name": "get_clipboard", "description": "Read the current clipboard text (e.g. text the user copied)",
         "parameters": {"type": "object", "properties": {}}}},
     {"type": "function", "function": {
-        "name": "get_active_window", "description": "Application class and title of the active window",
+        "name": "list_windows",
+        "description": "List the open windows (id, application class, title, which one is active)",
         "parameters": {"type": "object", "properties": {}}}},
+    {"type": "function", "function": {
+        "name": "focus_window", "description": "Switch to a window by its id from list_windows",
+        "parameters": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}}},
 ]
 
 
@@ -74,8 +78,15 @@ class Assistant:
             return "typed"
         if name == "get_clipboard":
             return self.desktop.clipboard()[:4000] or "(clipboard is empty)"
-        if name == "get_active_window":
-            return f"class={self.desktop.window_class!r} title={self.desktop.window_caption!r}"
+        if name == "list_windows":
+            return json.dumps(self.desktop.windows, ensure_ascii=False) if self.desktop.windows \
+                else "no window list (KWin script not loaded)"
+        if name == "focus_window":
+            wid = str(args.get("id", ""))
+            if not any(w["id"] == wid for w in self.desktop.windows):
+                return f"error: no window with id {wid!r}, call list_windows"
+            self.desktop.activate(wid)
+            return "activated"
         cmd = self.catalog.by_tool(name)
         if cmd is None:
             return f"error: there is no tool {name!r}"

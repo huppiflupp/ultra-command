@@ -7,6 +7,8 @@ after the other.
 
 from __future__ import annotations
 
+import json
+import os
 import queue
 import signal
 import threading
@@ -25,12 +27,13 @@ from .actions import ActionError, Executor, _fill
 from .assistant import Assistant
 from .audio import Recorder
 from .catalog import Catalog, Match
-from .desktop import Desktop, DesktopError
+from .desktop import Desktop, DesktopError, load_kwin_script, unload_kwin_script
 
 BUS_NAME = "io.github.huppiflupp.UltraCommand"
 OBJ_PATH = "/io/github/huppiflupp/UltraCommand"
 KWIN_SCRIPT = "ultra-command-active-window"
 MODES = ("talk", "dictate", "assistant")
+RECORDINGS = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "ultra-command" / "recordings"
 
 
 def load_catalog(cfg: dict) -> Catalog:
@@ -88,6 +91,7 @@ class Brain:
         if m:
             return self.run(m)
         fallback = self.cfg["route"]["fallback"]
+        self.log(f"  → no command, fallback {fallback}")
         if fallback == "dictate":
             self.dictate(text)
         elif fallback == "assistant":
@@ -115,6 +119,7 @@ class Brain:
             text += " "
         try:
             self.desktop.type_text(text)
+            self.log(f"  ⌨ typed into {self.desktop.window_class or 'unknown window'}")
         except DesktopError as e:
             self.log(f"  ! {e}")
             self.desktop.osd(self.msg("failed", what="type"), "dialog-error")
@@ -154,9 +159,16 @@ class Service(dbus.service.Object):
         """Process text as if it had been spoken (testing, scripting)."""
         self.daemon.jobs.put(("text", str(text), str(mode) or "talk"))
 
-    @dbus.service.method(BUS_NAME, in_signature="ss")
-    def ActiveWindow(self, cls, caption):
-        self.daemon.desktop.window_class, self.daemon.desktop.window_caption = str(cls), str(caption)
+    @dbus.service.method(BUS_NAME, out_signature="s")
+    def ListWindows(self):
+        return json.dumps(self.daemon.desktop.windows, ensure_ascii=False)
+
+    @dbus.service.method(BUS_NAME, in_signature="s")
+    def Windows(self, data):
+        try:
+            self.daemon.desktop.set_windows(str(data))
+        except ValueError:
+            pass
 
 
 class Daemon:
@@ -210,11 +222,30 @@ class Daemon:
                 else:
                     text = data
                 self.brain.handle(text, mode)
+                if kind == "audio":
+                    self.keep(data, text, mode)
             except stt.STTError as e:
                 self.log(f"! {e}")
                 self.desktop.osd(self.brain.msg("stt_error"), "dialog-error")
             except Exception:
                 traceback.print_exc()
+
+    def keep(self, wav: bytes, text: str, mode: str) -> None:
+        """Stores the recording and its transcript, keeps only the newest N."""
+        n = self.cfg["audio"]["keep_recordings"]
+        if n <= 0 or mode == "dictate":               # dictation may be private – never stored
+            return
+        try:
+            RECORDINGS.mkdir(parents=True, exist_ok=True)
+            now = time.time()
+            stem = RECORDINGS / f"{time.strftime('%Y%m%d-%H%M%S', time.localtime(now))}-{int(now * 1000) % 1000:03d}"
+            stem.with_suffix(".wav").write_bytes(wav)
+            stem.with_suffix(".txt").write_text(f"{mode}\t{text}\n", encoding="utf-8")
+            for old in sorted(RECORDINGS.glob("*.wav"))[:-n]:
+                old.unlink(missing_ok=True)
+                old.with_suffix(".txt").unlink(missing_ok=True)
+        except OSError as e:
+            self.log(f"! recording not kept: {e}")
 
     # --- KDE integration ------------------------------------------------------------
 
@@ -244,21 +275,11 @@ class Daemon:
 
     def load_kwin_script(self, bus: dbus.Bus) -> None:
         try:
-            scripting = dbus.Interface(bus.get_object("org.kde.KWin", "/Scripting"), "org.kde.kwin.Scripting")
-            if scripting.isScriptLoaded(KWIN_SCRIPT):
-                scripting.unloadScript(KWIN_SCRIPT)
             with resources.as_file(resources.files("ultracommand") / "data" / "active_window.js") as js:
-                sid = scripting.loadScript(str(js), KWIN_SCRIPT, signature="ss")
-            dbus.Interface(bus.get_object("org.kde.KWin", f"/Scripting/Script{sid}"), "org.kde.kwin.Script").run()
+                load_kwin_script(bus, str(js), KWIN_SCRIPT)
         except dbus.DBusException as e:
             self.log(f"KWin script not loaded ({e.get_dbus_message()}) – terminal detection off")
 
-    def unload_kwin_script(self, bus: dbus.Bus) -> None:
-        try:
-            dbus.Interface(bus.get_object("org.kde.KWin", "/Scripting"), "org.kde.kwin.Scripting") \
-                .unloadScript(KWIN_SCRIPT)
-        except dbus.DBusException:
-            pass
 
     def run(self) -> None:
         dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
@@ -276,7 +297,7 @@ class Daemon:
             loop.run()
         finally:
             self.recorder.stop()
-            self.unload_kwin_script(bus)
+            unload_kwin_script(bus, KWIN_SCRIPT)
 
     def _warm_up(self) -> None:
         try:

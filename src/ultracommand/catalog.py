@@ -5,6 +5,7 @@ Nothing here knows a particular language. A command file provides:
     [keywords]   assistant / dictate / cancel – words that start an utterance
     [numbers]    number words ("drei" = 3) for {n} slots
     filler       words dropped before matching ("bitte", "please")
+    [synonyms]   word forms unified before matching ("zum" = "zu", "wechsle" = "wechsel")
     ignore       known Whisper hallucinations on silence
     [messages]   texts shown on screen (OSD, notifications)
     [slots.X]    spoken value → real value, used as {X} in phrases and actions
@@ -80,6 +81,7 @@ class Catalog:
     keywords: dict[str, list[str]] = field(default_factory=dict)
     numbers: dict[str, int] = field(default_factory=dict)
     filler: list[str] = field(default_factory=list)
+    synonyms: dict[str, str] = field(default_factory=dict)
     ignore: list[str] = field(default_factory=list)
     fuzzy: float = 0.84
     messages: dict[str, str] = field(default_factory=lambda: dict(MESSAGES))
@@ -92,6 +94,7 @@ class Catalog:
             self.keywords[k] = [normalize(w) for w in words]
         self.numbers.update({normalize(k): int(v) for k, v in data.get("numbers", {}).items()})
         self.filler += [normalize(w) for w in data.get("filler", [])]
+        self.synonyms.update({normalize(k): normalize(v) for k, v in data.get("synonyms", {}).items()})
         self.ignore += [normalize(w) for w in data.get("ignore", [])]
         self.messages.update(data.get("messages", {}))
         for name, values in data.get("slots", {}).items():
@@ -108,9 +111,9 @@ class Catalog:
     # --- matching -----------------------------------------------------------
 
     def clean(self, text: str) -> str:
-        """Normalized text without filler words."""
+        """Normalized text without filler words, word forms unified."""
         words = normalize(text).split()
-        return " ".join(w for w in words if w not in self.filler)
+        return " ".join(self.synonyms.get(w, w) for w in words if w not in self.filler)
 
     def is_noise(self, text: str) -> bool:
         t = normalize(text)
@@ -134,10 +137,12 @@ class Catalog:
         t = self.clean(text)
         if not t:
             return None
+        raw = normalize(text)
         best: Match | None = None
         for cmd in self.commands.values():
             for phrase in cmd.say:
-                m = self._match_phrase(cmd, phrase, t)
+                # Free text must not lose filler words or get synonyms replaced.
+                m = self._match_phrase(cmd, phrase, raw if "{text}" in phrase else t)
                 if m and (best is None or m.score > best.score):
                     best = m
                     if m.score == 1.0:
@@ -152,7 +157,11 @@ class Catalog:
             score = difflib.SequenceMatcher(None, p, t).ratio()
             return Match(cmd, score=score) if score >= self.fuzzy else None
         # Slot phrase: fixed words must match exactly, slots are resolved (fuzzily) afterwards.
-        pattern = re.escape(self.clean(SLOT.sub(" uc0slot ", phrase)))
+        # A phrase that is nothing but a slot ("{app}") would turn every word that sounds a bit
+        # like a slot value into a command, so it needs an exact slot value.
+        bare = not SLOT.sub("", phrase).strip()
+        cleaner = normalize if "{text}" in phrase else self.clean
+        pattern = re.escape(cleaner(SLOT.sub(" uc0slot ", phrase)))
         names = SLOT.findall(phrase)
         for name in names:
             pattern = pattern.replace("uc0slot", f"(?P<{name}>.+?)", 1)
@@ -160,26 +169,30 @@ class Catalog:
         if not m:
             return None
         slots: dict[str, object] = {}
+        score = 0.99
         for name in names:
-            value = self.resolve_slot(name, m.group(name))
-            if value is None:
+            value, similarity = self._resolve(name, m.group(name))
+            if value is None or (bare and similarity < 1.0):
                 return None
             slots[name] = value
-        return Match(cmd, slots, score=0.99)
+            score = min(score, 0.9 + 0.09 * similarity)   # fuzzy slot < exact slot
+        return Match(cmd, slots, score=score)
 
-    def resolve_slot(self, name: str, spoken: str) -> object | None:
+    def _resolve(self, name: str, spoken: str) -> tuple[object | None, float]:
         spoken = normalize(spoken)
         if name == "n":
             if spoken.isdigit():
-                return int(spoken)
-            return self.numbers.get(spoken)
+                return int(spoken), 1.0
+            return self.numbers.get(spoken), 1.0
         if name == "text":                      # free text, taken as is
-            return spoken
+            return spoken, 1.0
         values = self.slot_values.get(name, {})
         if spoken in values:
-            return values[spoken]
+            return values[spoken], 1.0
         close = difflib.get_close_matches(spoken, values, n=1, cutoff=0.75)
-        return values[close[0]] if close else None
+        if not close:
+            return None, 0.0
+        return values[close[0]], difflib.SequenceMatcher(None, spoken, close[0]).ratio()
 
     # --- for Whisper and the LLM ---------------------------------------------
 

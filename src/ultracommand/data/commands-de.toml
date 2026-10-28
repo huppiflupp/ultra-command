@@ -17,6 +17,22 @@ ignore = [
   "amen",
 ]
 
+[synonyms]
+zum = "zu"
+zur = "zu"
+wechsle = "wechsel"
+wechseln = "wechsel"
+wechsele = "wechsel"
+gehe = "geh"
+gehen = "geh"
+"nächstes" = "nächste"
+"nächster" = "nächste"
+anderes = "andere"
+anderer = "andere"
+anderen = "andere"
+"öffnen" = "öffne"
+starten = "starte"
+
 [keywords]
 # Am Satzanfang: alles danach geht an …
 assistant = ["computer", "ki", "lokale ki", "ki lokal", "assistent", "hey computer"]
@@ -72,6 +88,12 @@ dateien = "dolphin"
 dolphin = "dolphin"
 terminal = "konsole"
 konsole = "konsole"
+konsolenfenster = "konsole"
+shell = "konsole"
+kommandozeile = "konsole"
+"thunder bird" = "thunderbird"
+mails = "thunderbird"
+"mail programm" = "thunderbird"
 editor = "kate"
 kate = "kate"
 rechner = "kcalc"
@@ -150,6 +172,12 @@ id = "desktop.switch"
 say = ["desktop {n}", "arbeitsfläche {n}"]
 do = { kwin = "Switch to Desktop {n}" }
 help = "Switch to virtual desktop number n"
+
+[[command]]
+id = "window.focus"
+say = ["wechsel zu {app}", "geh zu {app}", "zu {app}", "nächste {app}", "andere {app}", "{app}"]
+do = { focus = "{app}" }
+help = "Switch to the window of an application (the next one if it is already active); start it if it is not running"
 
 [[command]]
 id = "app.open"

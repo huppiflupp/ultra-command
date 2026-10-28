@@ -121,3 +121,40 @@ def test_repeat_is_capped(de):
     m = de.match("runter 1000")
     with pytest.raises(ActionError):
         Executor(FakeDesktop()).execute(m.command, m.slots)
+
+
+@pytest.mark.parametrize("text", ["Wechsel zum Dateimanager", "wechseln, zu, dolphin,", "Geh zum Dateimanager",
+                                  "Dateimanager", "nächstes Dolphin"])
+def test_focus(de, text):
+    assert ids(de, text) == ("window.focus", {"app": "dolphin"})
+
+
+def test_open_beats_bare_app(de):
+    assert ids(de, "Öffne Thunderbird") == ("app.open", {"app": "thunderbird"})
+    assert ids(de, "Thunderbird öffnen") == ("app.open", {"app": "thunderbird"})
+
+
+@pytest.mark.parametrize("text", ["Karte", "Kante", "Datei", "Rechnen", "Kein Mail"])
+def test_bare_slot_needs_exact_value(de, text):
+    m = de.match(text)
+    assert m is None or m.command.id != "window.focus"
+
+
+def test_text_slot_keeps_words():
+    cat = Catalog()
+    cat.add_toml(config.builtin_commands("de"))
+    cat.add_toml('[[command]]\nid = "note"\nsay = ["notiz {text}"]\ndo = {type = "{text}"}')
+    assert ids(cat, "Notiz zum Bahnhof gehen") == ("note", {"text": "zum bahnhof gehen"})
+
+
+def test_windows_of():
+    from ultracommand.desktop import Desktop
+    d = Desktop(config.load())
+    d.windows = [{"id": "1", "cls": "org.kde.konsole", "caption": "", "active": False},
+                 {"id": "2", "cls": "net.thunderbird.Thunderbird", "caption": "", "active": True},
+                 {"id": "3", "cls": "code-oss-helper", "caption": "", "active": False},
+                 {"id": "4", "cls": "org.foo.App", "caption": "", "active": False}]
+    assert [w["id"] for w in d.windows_of("konsole")] == ["1"]
+    assert [w["id"] for w in d.windows_of("thunderbird")] == ["2"]
+    assert d.windows_of("code") == []                      # no substring match
+    assert [w["id"] for w in d.windows_of("flatpak run org.foo.App")] == ["4"]

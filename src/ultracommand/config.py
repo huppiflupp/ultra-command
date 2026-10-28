@@ -23,19 +23,23 @@ DEFAULTS: dict = {
     "whisper": {
         "url": "http://127.0.0.1:8097/inference",
         "timeout": 30,
-        # Bias recognition towards the command phrases (helps a lot with short commands).
-        "prompt_commands": True,
+        # Bias recognition towards the command phrases. Off by default: Whisper imitates the
+        # prompt's style (comma lists) and inserts listed words that were never spoken.
+        "prompt_commands": False,
     },
     "audio": {
         "max_seconds": 60,
         # Toggle mode (`ultra-command toggle`) only: stop after this much silence once speech began.
         "silence_seconds": 1.2,
         "silence_level": 500,          # RMS of 16-bit samples
+        # Keep the last N recordings with their transcript for tuning (0 = keep none).
+        # Never for the dictate mode/keyword – but "talk" utterances can be private too.
+        "keep_recordings": 0,
     },
     "route": {
         # What to do with speech that is neither a command nor starts with a keyword:
         # "dictate" (type it), "assistant" (ask the LLM) or "ignore".
-        "fallback": "dictate",
+        "fallback": "assistant",
         "fuzzy": 0.84,                 # minimum similarity for a command match (0..1)
     },
     "input": {

@@ -113,6 +113,7 @@ def main() -> None:
     p = sub.add_parser("match", help="show what a phrase would do (dry run)")
     p.add_argument("text", nargs="+")
     sub.add_parser("commands", help="list commands and keywords")
+    sub.add_parser("windows", help="windows as the running daemon sees them")
     p = sub.add_parser("transcribe", help="transcribe a 16 kHz WAV file")
     p.add_argument("wav")
     p.add_argument("--prompt", action="store_true", help="bias towards command phrases")
@@ -131,6 +132,9 @@ def main() -> None:
         _proxy().Stop()
     elif args.cmd == "say":
         _proxy().Say(" ".join(args.text), args.mode)
+    elif args.cmd == "windows":
+        for w in json.loads(str(_proxy().ListWindows())):
+            print(f"{'*' if w['active'] else ' '} {w['cls']:28} {w['caption'][:70]}")
     else:
         {"match": cmd_match, "commands": cmd_commands, "transcribe": cmd_transcribe,
          "check": cmd_check}[args.cmd](cfg, args)
